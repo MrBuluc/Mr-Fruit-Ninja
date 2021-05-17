@@ -7,16 +7,16 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.g2d.freetype.FreeType;
 import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.Array;
-import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.TimeUtils;
 
 import java.util.Random;
 
 public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
+	ShapeRenderer shapes;
 	SpriteBatch batch;
 
 	Texture background;
@@ -25,16 +25,21 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 	BitmapFont font, playFont;
 	FreeTypeFontGenerator fontGenerator;
 
-	int lives = 3, score = 0;
+	int lives = 0, score = 0;
 
-	private double currentTime, gameOverTime = -1f;
+	private double currentTime, gameOverTime = -1.f;
 
 	Random random = new Random();
 
 	Array<Fruit> fruitArray = new Array<Fruit>();
 
+	float genCounter = 0;
+	private  final float startGenSpeed = 1.1f;
+	float genSpeed = startGenSpeed;
+
 	@Override
 	public void create () {
+		shapes = new ShapeRenderer();
 		batch = new SpriteBatch();
 		background = new Texture("ninjabackground.png");
 		bomb = new Texture("bomb.png");
@@ -67,20 +72,28 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 		batch.begin();
 		batch.draw(background, 0, 0, width, height);
 
-		double newTime = TimeUtils.millis() / 1000f;
+		double newTime = TimeUtils.millis() / 1000.0;
 		double frameTime = Math.min(newTime - currentTime, 0.3);
 
 		float deltaTime = (float) frameTime;
 
 		currentTime = newTime;
 
-		addItem();
-
 		if (lives <= 0 && gameOverTime == 0f) {
 			gameOverTime = currentTime;
 		}
 
 		if (lives > 0) {
+
+			genSpeed -= deltaTime * 0.015f;
+
+			if (genCounter <= 0f) {
+				genCounter = genSpeed;
+				addItem();
+			} else {
+				genCounter -= deltaTime;
+			}
+
 			for (int i = 0; i < lives; i++) {
 				batch.draw(health, i * 60f + 20f, height - 60f, 50f, 50f);
 			}
@@ -103,9 +116,36 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 						break;
 				}
 			}
+
+			boolean holdLives = false;
+			Array<Fruit> toRemove = new Array<Fruit>();
+
+			for (Fruit fruit : fruitArray) {
+				if (fruit.outOfScreen()) {
+					toRemove.add(fruit);
+
+					if (fruit.living && fruit.type == Fruit.Type.REGULAR) {
+						lives--;
+						holdLives = true;
+						break;
+					}
+				}
+			}
+
+			if (holdLives) {
+				for (Fruit fruit : fruitArray) {
+					fruit.living = false;
+				}
+			}
+
+			for (Fruit fruit : toRemove) {
+				fruitArray.removeValue(fruit, true);
+			}
 		}
-		font.draw(batch, "Score: 0", 30, 80);
-		playFont.draw(batch, "Cut to Play", width * 0.5f, height * 0.5f);
+		font.draw(batch, "Score: " + score, 30, 80);
+		if (lives <= 0) {
+			playFont.draw(batch, "Cut to Play!", width * 0.5f, height * 0.5f);
+		}
 		batch.end();
 	}
 
@@ -113,8 +153,10 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 		int width = Gdx.graphics.getWidth();
 		int height = Gdx.graphics.getHeight();
 
-		float pos = random.nextFloat() * Math.max(width, height);
-		Fruit item = new Fruit(new Vector2(pos, -Fruit.radius), new Vector2(pos, pos));
+		float pos = random.nextFloat() * width;
+		Fruit item = new Fruit(new Vector2(pos, -Fruit.radius),
+				new Vector2((width * 0.5f - pos) * 0.3f + (random.nextFloat
+						() - 0.5f), height * 0.5f));
 
 		float type = random.nextFloat();
 		if (type > 0.98) {
@@ -130,7 +172,9 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 	@Override
 	public void dispose () {
 		batch.dispose();
+		shapes.dispose();
 		font.dispose();
+		playFont.dispose();
 		fontGenerator.dispose();
 	}
 
@@ -161,6 +205,45 @@ public class MrFruitNinja extends ApplicationAdapter implements InputProcessor {
 
 	@Override
 	public boolean touchDragged(int screenX, int screenY, int pointer) {
+		int height = Gdx.graphics.getHeight();
+
+		if (lives <= 0 && currentTime - gameOverTime > 2f) {
+			gameOverTime = 0f;
+			score = 0;
+			lives = 4;
+			genSpeed = startGenSpeed;
+			fruitArray.clear();
+		} else {
+			Array<Fruit> toRemove = new Array<Fruit>();
+			Vector2 pos = new Vector2(screenX, height - screenY);
+			int plusScore = 0;
+			for (Fruit fruit : fruitArray) {
+				if (fruit.clicked(pos)) {
+					toRemove.add(fruit);
+					switch (fruit.type) {
+						case REGULAR:
+							plusScore++;
+							break;
+						case EXTRA:
+							plusScore += 2;
+							score++;
+							break;
+						case ENEMY:
+							lives--;
+							break;
+						case LIFE:
+							lives++;
+							break;
+					}
+				}
+			}
+
+			score += plusScore * plusScore;
+
+			for (Fruit fruit: toRemove) {
+				fruitArray.removeValue(fruit, true);
+			}
+		}
 		return false;
 	}
 

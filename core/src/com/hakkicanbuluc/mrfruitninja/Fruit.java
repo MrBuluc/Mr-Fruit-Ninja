@@ -1,10 +1,16 @@
 package com.hakkicanbuluc.mrfruitninja;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Vector2;
 
 public class Fruit {
     public static float radius = 60f;
+
     Vector2 pos, velocity;
+
+    public boolean living = true;
+
+    int height = Gdx.graphics.getHeight();
 
     public enum Type {
         REGULAR, EXTRA, ENEMY, LIFE
@@ -30,6 +36,8 @@ public class Fruit {
     }
 
     public void update(float dt) {
+        velocity.y -= dt * (height * 0.2f);
+        velocity.x -= dt * Math.signum(velocity.x) * 5f;
         pos.mulAdd(velocity, dt);
     }
 }
